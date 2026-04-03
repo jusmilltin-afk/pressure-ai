@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Контроль Тиску - AI розпізнавання</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1/1;
+            background: #000;
+            border-radius: 32px;
+            overflow: hidden;
+            border: 2px solid #1e293b;
+        }
+        #video-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .scanner-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85%;
+            height: 85%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            pointer-events: none;
+        }
+        .corner {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            border: 4px solid #6366f1;
+        }
+        .top-left { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 20px; }
+        .top-right { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 20px; }
+        .bottom-left { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 20px; }
+        .bottom-right { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 20px; }
+        
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            backdrop-filter: blur(4px);
+        }
+        
+        .input-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 flex flex-col items-center">
+
+    <div class="w-full max-w-md mb-6 text-center">
+        <div class="flex items-center justify-center gap-3 mb-2">
+            <div class="bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-500/20">
+                <i class="fas fa-heart text-2xl text-white"></i>
+            </div>
+            <h1 class="text-3xl font-bold tracking-tight">Контроль Тиску</h1>
+        </div>
+        <p class="text-slate-400 text-xs tracking-widest uppercase">AI Vision • 2026 Edition</p>
+    </div>
+
+    <div class="w-full max-w-md space-y-6">
+        <div class="camera-container shadow-2xl">
+            <video id="video-feed" autoplay playsinline muted></video>
+            <div class="scanner-frame">
+                <div class="corner top-left"></div>
+                <div class="corner top-right"></div>
+                <div class="corner bottom-left"></div>
+                <div class="corner bottom-right"></div>
+                <div class="absolute bottom-6 left-0 right-0 text-center text-[10px] text-white/50 uppercase tracking-[0.2em] px-4">
+                    Наведіть камеру на екран тонометра
+                </div>
+            </div>
+            
+            <div id="camera-status" class="absolute top-4 right-4 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-2">
+                <span id="status-dot" class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                <span id="status-text">КАМЕРА OK</span>
+            </div>
+
+            <div id="loading" class="loading-overlay">
+                <div class="flex flex-col items-center gap-4">
+                    <div class="relative">
+                        <div class="w-16 h-16 border-4 border-indigo-500/20 rounded-full"></div>
+                        <div class="absolute top-0 w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <p class="text-indigo-400 font-bold animate-pulse">РОЗПІЗНАВАННЯ...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+            <div class="input-card p-4 rounded-[2rem] text-center">
+                <label class="block text-[9px] text-slate-400 uppercase font-black mb-1">SYS</label>
+                <input type="number" id="sys-input" placeholder="000" class="bg-transparent w-full text-2xl font-black text-center outline-none text-white">
+            </div>
+            <div class="input-card p-4 rounded-[2rem] text-center">
+                <label class="block text-[9px] text-slate-400 uppercase font-black mb-1">DIA</label>
+                <input type="number" id="dia-input" placeholder="00" class="bg-transparent w-full text-2xl font-black text-center outline-none text-white">
+            </div>
+            <div class="input-card p-4 rounded-[2rem] text-center">
+                <label class="block text-[9px] text-slate-400 uppercase font-black mb-1">PULSE</label>
+                <input type="number" id="pulse-input" placeholder="00" class="bg-transparent w-full text-2xl font-black text-center outline-none text-white">
+            </div>
+        </div>
+
+        <button id="capture-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-[0.97] transition-all py-5 rounded-[2rem] font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-indigo-600/30">
+            <i class="fas fa-expand text-xl"></i>
+            СФОТОГРАФУВАТИ
+        </button>
+
+        <div class="pt-4">
+            <div class="flex justify-between items-center mb-4 px-2">
+                <h3 class="font-black text-sm uppercase tracking-wider">Останні заміри</h3>
+                <span id="log-count" class="bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-full text-[10px] font-bold">0</span>
+            </div>
+            <div id="history-list" class="space-y-3">
+                <div id="empty-state" class="text-center py-10 text-slate-600 text-xs uppercase tracking-widest font-bold border-2 border-dashed border-slate-800 rounded-[2rem]">
+                    Історія порожня
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="capture-canvas" class="hidden"></canvas>
+
+    <script>
+        const apiKey = ""; // API ключ середовища
+        const video = document.getElementById('video-feed');
+        const canvas = document.getElementById('capture-canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const loading = document.getElementById('loading');
+        const historyList = document.getElementById('history-list');
+
+        const sysInput = document.getElementById('sys-input');
+        const diaInput = document.getElementById('dia-input');
+        const pulseInput = document.getElementById('pulse-input');
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                document.getElementById('status-text').innerText = "ПОМИЛКА";
+            }
+        }
+
+        async function recognizeBloodPressure(base64Image) {
+            const model = "gemini-2.5-flash-preview-09-2025";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const prompt = "Act as a medical device OCR. Extract JSON: {\"sys\": number, \"dia\": number, \"pulse\": number}";
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64Image } }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            };
+
+            const response = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
+            const result = await response.json();
+            return JSON.parse(result.candidates[0].content.parts[0].text);
+        }
+
+        captureBtn.addEventListener('click', async () => {
+            captureBtn.disabled = true;
+            loading.style.display = 'flex';
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const base64Data = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+
+            try {
+                const data = await recognizeBloodPressure(base64Data);
+                if (data) {
+                    sysInput.value = data.sys || '';
+                    diaInput.value = data.dia || '';
+                    pulseInput.value = data.pulse || '';
+                    saveToHistory(data.sys, data.dia, data.pulse);
+                    if (navigator.vibrate) navigator.vibrate(50);
+                }
+            } catch (e) {} finally {
+                loading.style.display = 'none';
+                captureBtn.disabled = false;
+            }
+        });
+
+        function saveToHistory(sys, dia, pulse) {
+            const empty = document.getElementById('empty-state');
+            if (empty) empty.remove();
+            const time = new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+            const record = document.createElement('div');
+            record.className = 'input-card p-5 rounded-[2rem] flex justify-between items-center';
+            record.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="bg-indigo-500/10 w-12 h-12 rounded-full flex items-center justify-center text-indigo-400 font-bold text-xs">${time}</div>
+                    <div><div class="font-black text-xl text-white">${sys}/${dia}</div></div>
+                </div>
+                <div class="text-right"><div class="font-black text-indigo-400 text-lg">${pulse || '--'}</div></div>
+            `;
+            historyList.prepend(record);
+            document.getElementById('log-count').innerText = historyList.children.length;
+        }
+
+        window.onload = initCamera;
+    </script>
+</body>
+</html>
